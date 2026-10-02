@@ -84,7 +84,8 @@ export const Navbar: React.FC = () => {
 
             {/* CTA Button */}
             <a
-              href="#contacto"
+              href="https://silent-goats-throw.loca.lt"
+              target="_blank"
               className="inline-flex items-center justify-center bg-medical-blue hover:bg-medical-darkBlue text-white text-sm font-semibold px-5 py-2.5 rounded-full transition-all shadow-md shadow-blue-900/15 hover:shadow-lg hover:-translate-y-0.5"
             >
               {t.nav.contact}
@@ -159,7 +160,8 @@ export const Navbar: React.FC = () => {
           </a>
           <div className="pt-2">
             <a
-              href="#contacto"
+              href="https://silent-goats-throw.loca.lt"
+              target="_blank"
               onClick={() => setMobileMenuOpen(false)}
               className="block text-center w-full bg-medical-blue text-white py-3 rounded-xl font-semibold shadow-md"
             >

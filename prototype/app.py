@@ -1,29 +1,33 @@
 """
-SafeRx AI — Asistente Clínico Inteligente de Prescripción Segura
+Safe AI — Asistente Clínico Inteligente de Prescripción Segura
 ================================================================================
 Aplicación interactiva Streamlit diseñada para médicos y directores clínicos
 del Grupo Hospitalario FritzeFriends.
 
-Permite:
-1. Validar prescripciones en tiempo real con cruce de interacciones deterministas (SQLite).
-2. Estimar el score de riesgo global mediante el modelo de Machine Learning entrenado.
-3. Consultar métricas de seguridad hospitalaria y explorar el vademécum clínico.
+Incluye soporte multilingüe completo con barra de idiomas (Español, Inglés y Alemán).
 """
 
 from datetime import datetime
 from pathlib import Path
 import sqlite3
+import sys
 
 import altair as alt
 import joblib
 import pandas as pd
 import streamlit as st
 
+# Soporte de importación flexible para traducciones
+try:
+    from prototype.translations import TRANSLATIONS
+except ImportError:
+    from translations import TRANSLATIONS
+
 # ---------------------------------------------------------------------------
 # Configuración general y rutas
 # ---------------------------------------------------------------------------
 st.set_page_config(
-    page_title="SafeRx AI | Asistente Clínico Inteligente",
+    page_title="Safe AI | Asistente Clínico Inteligente",
     page_icon="🏥",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -35,19 +39,35 @@ PREPROCESSOR_PATH = BASE_DIR / "prototype" / "models" / "preprocesador.pkl"
 MODEL_PATH = BASE_DIR / "prototype" / "models" / "modelo_riesgo.pkl"
 FDA_DATA_PATH = BASE_DIR / "data" / "raw" / "openfda_adverse_events.csv"
 
+# Inicializar idioma en session_state
+if "lang" not in st.session_state:
+    st.session_state["lang"] = "es"
+
+lang = st.session_state["lang"]
+t = TRANSLATIONS.get(lang, TRANSLATIONS["es"])
+
 # Estilos CSS personalizados
 st.markdown("""
 <style>
     .main-title {
-        font-size: 2.2rem;
+        font-size: 2.1rem;
         font-weight: 800;
         color: #005B94;
-        margin-bottom: 0.2rem;
+        margin-bottom: 0.15rem;
     }
     .sub-title {
-        font-size: 1.05rem;
+        font-size: 1.0rem;
         color: #4A5568;
-        margin-bottom: 1.5rem;
+        margin-bottom: 1.2rem;
+    }
+    .lang-bar-container {
+        background: #F1F5F9;
+        border-radius: 12px;
+        padding: 6px 12px;
+        border: 1px solid #CBD5E1;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
     }
     .kpi-card {
         background: #F8FAFC;
@@ -154,14 +174,69 @@ def verificar_interacciones_deterministas(ids_medicamentos: list[int]):
 
 
 # ---------------------------------------------------------------------------
-# Header Institucional
+# Sidebar: Barra de Idioma y Acceso Rápido
 # ---------------------------------------------------------------------------
-col_logo, col_header = st.columns([1, 6])
+with st.sidebar:
+    st.markdown("### 🌐 " + t["lang_bar_label"])
+    side_lang = st.radio(
+        "Selector de idioma sidebar",
+        options=["es", "en", "de"],
+        format_func=lambda x: {"es": "🇪🇸 Español", "en": "🇬🇧 English", "de": "🇩🇪 Deutsch"}[x],
+        index=["es", "en", "de"].index(st.session_state["lang"]),
+        key="sidebar_lang_select",
+        label_visibility="collapsed"
+    )
+    if side_lang != st.session_state["lang"]:
+        st.session_state["lang"] = side_lang
+        st.session_state["top_lang_bar"] = side_lang
+        st.session_state["top_lang_radio"] = side_lang
+        st.rerun()
+
+    st.divider()
+    st.markdown("🏥 **Safe AI Clinical Suite**")
+    st.caption("Grupo Hospitalario FritzeFriends\n\n*CDSS Real-Time Audit*")
+    st.caption("Latency: < 200 ms | FAERS FDA")
+
+
+# ---------------------------------------------------------------------------
+# Header Institucional con Barra de Idiomas Superior
+# ---------------------------------------------------------------------------
+col_logo, col_header, col_lang = st.columns([0.8, 5.0, 2.2])
 with col_logo:
-    st.markdown("<h1 style='text-align: center; font-size: 3.5rem; margin:0;'>🛡️</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center; font-size: 3.4rem; margin:0;'>🛡️</h1>", unsafe_allow_html=True)
 with col_header:
-    st.markdown("<div class='main-title'>SafeRx AI — Asistente Clínico Inteligente</div>", unsafe_allow_html=True)
-    st.markdown("<div class='sub-title'>Plataforma de Prescripción Segura & Prevención de Eventos Adversos | <b>FritzeFriends</b></div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='main-title'>{t['main_title']}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='sub-title'>{t['sub_title']}</div>", unsafe_allow_html=True)
+with col_lang:
+    st.markdown(f"<div style='text-align: right; margin-bottom: 3px; font-weight: 700; color: #005B94; font-size: 0.85rem;'>🌐 {t['lang_bar_label']}</div>", unsafe_allow_html=True)
+    if hasattr(st, "segmented_control"):
+        top_lang = st.segmented_control(
+            "Top Language Bar",
+            options=["es", "en", "de"],
+            format_func=lambda x: {"es": "🇪🇸 ES", "en": "🇬🇧 EN", "de": "🇩🇪 DE"}[x],
+            default=st.session_state["lang"],
+            key="top_lang_bar",
+            label_visibility="collapsed"
+        )
+        if top_lang and top_lang != st.session_state["lang"]:
+            st.session_state["lang"] = top_lang
+            st.session_state["sidebar_lang_select"] = top_lang
+            st.rerun()
+    else:
+        top_lang = st.radio(
+            "Top Language Bar",
+            options=["es", "en", "de"],
+            format_func=lambda x: {"es": "🇪🇸 ES", "en": "🇬🇧 EN", "de": "🇩🇪 DE"}[x],
+            index=["es", "en", "de"].index(st.session_state["lang"]),
+            horizontal=True,
+            key="top_lang_radio",
+            label_visibility="collapsed"
+        )
+        if top_lang != st.session_state["lang"]:
+            st.session_state["lang"] = top_lang
+            st.session_state["sidebar_lang_select"] = top_lang
+            st.rerun()
+
 
 # ---------------------------------------------------------------------------
 # Carga de datos
@@ -177,12 +252,12 @@ def cargar_eventos_fda():
     return pd.DataFrame()
 
 
-# Tabs de navegación
+# Tabs de navegación multilingües
 tab_prescripcion, tab_dashboard, tab_vademecum, tab_openfda = st.tabs([
-    "🩺 Consulta & Prescripción Asistida",
-    "📊 Métricas & Seguridad Hospitalaria",
-    "📖 Vademécum & Reglas Farmacológicas",
-    "📡 Farmacovigilancia Real (OpenFDA)"
+    t["tab_prescripcion"],
+    t["tab_dashboard"],
+    t["tab_vademecum"],
+    t["tab_openfda"]
 ])
 
 # ===========================================================================
@@ -192,49 +267,50 @@ with tab_prescripcion:
     col_izq, col_der = st.columns([1, 1.4], gap="large")
 
     with col_izq:
-        st.subheader("1. Ficha del Paciente y Consulta")
+        st.subheader(t["sec1_patient"])
         
         # Selector de Paciente
         opciones_pacientes = {
-            f"{row['nombre']} (ID: {row['id_paciente']} - {row['edad']} años)": row["id_paciente"]
+            f"{row['nombre']} (ID: {row['id_paciente']} - {row['edad']} {t['years']})": row["id_paciente"]
             for _, row in df_pacientes.iterrows()
         }
-        paciente_sel = st.selectbox("Seleccionar Paciente:", list(opciones_pacientes.keys()))
+        paciente_sel = st.selectbox(t["select_patient"], list(opciones_pacientes.keys()))
         id_paciente_actual = opciones_pacientes[paciente_sel]
         datos_paciente = df_pacientes[df_pacientes["id_paciente"] == id_paciente_actual].iloc[0]
 
         # Resumen del paciente
         col_p1, col_p2, col_p3 = st.columns(3)
-        col_p1.metric("Edad", f"{datos_paciente['edad']} años")
-        col_p2.metric("Género", "Masculino" if datos_paciente["genero"] == "M" else "Femenino")
-        col_p3.metric("Condición", datos_paciente["condiciones_previas"])
+        col_p1.metric(t["age"], f"{datos_paciente['edad']} {t['years']}")
+        gender_display = t["gender_m"] if datos_paciente["genero"] == "M" else t["gender_f"]
+        col_p2.metric(t["gender"], gender_display)
+        col_p3.metric(t["condition"], datos_paciente["condiciones_previas"])
 
         # Médico y Especialidad
         st.divider()
-        st.subheader("2. Médico Responsable")
+        st.subheader(t["sec2_doctor"])
         opciones_medicos = {
             f"{row['nombre']} — {row['especialidad']}": row["id_medico"]
             for _, row in df_medicos.iterrows()
         }
-        medico_sel = st.selectbox("Médico Prescriptor:", list(opciones_medicos.keys()))
+        medico_sel = st.selectbox(t["select_doctor"], list(opciones_medicos.keys()))
         id_medico_actual = opciones_medicos[medico_sel]
         datos_medico = df_medicos[df_medicos["id_medico"] == id_medico_actual].iloc[0]
 
         # Medicación previa activa del paciente
         st.divider()
-        st.subheader("3. Medicación Activa del Paciente")
+        st.subheader(t["sec3_active_meds"])
         df_activa = obtener_medicacion_activa(id_paciente_actual)
         if not df_activa.empty:
-            st.info(f"El paciente tiene **{len(df_activa)} medicamentos registrados** en consultas previas recientes:")
+            st.info(t["active_meds_found"].format(count=len(df_activa)))
             for _, m in df_activa.iterrows():
-                st.markdown(f"- 💊 **{m['principio_activo']}** *({m['nombre_comercial']})* — `{m['dosis']}` *(Fecha: {m['fecha']})*")
+                st.markdown(f"- 💊 **{m['principio_activo']}** *({m['nombre_comercial']})* — `{m['dosis']}` *({t['date_label']}: {m['fecha']})*")
         else:
-            st.success("No hay medicación crónica previa registrada para este paciente.")
+            st.success(t["no_active_meds"])
 
     with col_der:
-        st.subheader("4. Prescripción de Nuevos Medicamentos")
+        st.subheader(t["sec4_new_rx"])
         
-        diagnostico = st.text_input("Diagnóstico de la consulta:", value="Evaluación clínica general")
+        diagnostico = st.text_input(t["diagnosis_label"], value=t["diagnosis_default"])
 
         # Multiselect de nuevos medicamentos
         dict_meds = {
@@ -243,9 +319,9 @@ with tab_prescripcion:
         }
         
         meds_seleccionados = st.multiselect(
-            "Seleccionar medicamentos a recetar en esta consulta:",
+            t["select_meds_label"],
             options=list(dict_meds.keys()),
-            help="Seleccione uno o más fármacos a prescribir."
+            help=t["select_meds_help"]
         )
 
         ids_nuevos = [dict_meds[m] for m in meds_seleccionados]
@@ -255,10 +331,10 @@ with tab_prescripcion:
         num_total_farmacos = len(ids_totales_paciente)
 
         st.divider()
-        st.subheader("5. Auditoría de Seguridad Farmacológica SafeRx AI")
+        st.subheader(t["sec5_audit"])
 
         if not meds_seleccionados:
-            st.warning("Seleccione al menos un medicamento para evaluar la compatibilidad y el score de riesgo.")
+            st.warning(t["warn_no_meds"])
         else:
             # 1. Detección Determinista (Reglas Vademécum)
             conflictos = verificar_interacciones_deterministas(ids_totales_paciente)
@@ -269,32 +345,32 @@ with tab_prescripcion:
                     if gravedad == "grave":
                         st.markdown(f"""
                         <div class='alert-card-danger'>
-                            <h4 style='color: #C53030; margin:0 0 5px 0;'>🚨 ALERTA CRÍTICA: INTERACCIÓN GRAVE DETECTADA</h4>
-                            <b>Combinación peligrosa:</b> {c['med1']} ({c['com1']}) + {c['med2']} ({c['com2']})<br>
-                            <b>Efecto Adverso:</b> {c['descripcion']}<br>
-                            <b>Recomendación Clínica:</b> <i>Suspender o sustituir uno de los fármacos. Alto riesgo de complicaciones severas o litigio médico.</i>
+                            <h4 style='color: #C53030; margin:0 0 5px 0;'>{t['alert_danger_title']}</h4>
+                            <b>{t['danger_combo']}</b> {c['med1']} ({c['com1']}) + {c['med2']} ({c['com2']})<br>
+                            <b>{t['adverse_effect']}</b> {c['descripcion']}<br>
+                            <b>{t['clinical_rec']}</b> <i>{t['danger_rec_text']}</i>
                         </div>
                         """, unsafe_allow_html=True)
                     else:
                         st.markdown(f"""
                         <div class='alert-card-warning'>
-                            <h4 style='color: #DD6B20; margin:0 0 5px 0;'>⚠️ ADVERTENCIA: INTERACCIÓN MODERADA</h4>
-                            <b>Combinación:</b> {c['med1']} ({c['com1']}) + {c['med2']} ({c['com2']})<br>
-                            <b>Efecto Adverso:</b> {c['descripcion']}<br>
-                            <b>Recomendación Clínica:</b> <i>Monitorizar al paciente o ajustar dosis y horarios de toma.</i>
+                            <h4 style='color: #DD6B20; margin:0 0 5px 0;'>{t['alert_warning_title']}</h4>
+                            <b>{t['warning_combo']}</b> {c['med1']} ({c['com1']}) + {c['med2']} ({c['com2']})<br>
+                            <b>{t['adverse_effect']}</b> {c['descripcion']}<br>
+                            <b>{t['clinical_rec']}</b> <i>{t['warning_rec_text']}</i>
                         </div>
                         """, unsafe_allow_html=True)
             else:
-                st.markdown("""
+                st.markdown(f"""
                 <div class='alert-card-success'>
-                    <h4 style='color: #276749; margin:0 0 5px 0;'>✅ SIN INTERACCIONES DIRECTAS CONOCIDAS</h4>
-                    No se han detectado contraindicaciones absolutas en el vademécum para los fármacos seleccionados.
+                    <h4 style='color: #276749; margin:0 0 5px 0;'>{t['alert_success_title']}</h4>
+                    {t['alert_success_desc']}
                 </div>
                 """, unsafe_allow_html=True)
 
             # 2. Score Predictivo de Riesgo (Machine Learning)
             if preprocessor and model:
-                st.markdown("#### 📈 Índice Predictivo de Riesgo Clínico (Modelo ML)")
+                st.markdown(f"#### {t['ml_title']}")
                 hoy = datetime.now()
                 es_fin_de_semana = 1 if hoy.weekday() in [5, 6] else 0
 
@@ -317,24 +393,24 @@ with tab_prescripcion:
                     col_m1, col_m2 = st.columns([1, 2])
                     with col_m1:
                         if pct_riesgo >= 60:
-                            st.metric("Probabilidad de Evento Adverso", f"{pct_riesgo}%", delta="Alto Riesgo", delta_color="inverse")
+                            st.metric(t["ml_metric_label"], f"{pct_riesgo}%", delta=t["high_risk"], delta_color="inverse")
                         elif pct_riesgo >= 35:
-                            st.metric("Probabilidad de Evento Adverso", f"{pct_riesgo}%", delta="Riesgo Moderado", delta_color="off")
+                            st.metric(t["ml_metric_label"], f"{pct_riesgo}%", delta=t["mod_risk"], delta_color="off")
                         else:
-                            st.metric("Probabilidad de Evento Adverso", f"{pct_riesgo}%", delta="Bajo Riesgo")
+                            st.metric(t["ml_metric_label"], f"{pct_riesgo}%", delta=t["low_risk"])
 
                     with col_m2:
                         st.progress(prob_riesgo)
                         if num_total_farmacos >= 3:
-                            st.caption("⚠️ **Atención:** Paciente clasificado en régimen de **polifarmacia** (≥ 3 fármacos concurrentes).")
+                            st.caption(t["polypharmacy_alert"])
                 except Exception as e:
-                    st.caption(f"Error en inferencia predictiva: {e}")
+                    st.caption(f"Error: {e}")
 
             # Botón de Confirmación
             st.divider()
             col_b1, col_b2 = st.columns([1.5, 1])
             with col_b1:
-                confirmar = st.button("💾 Autorizar y Registrar Consulta en Hospital EHR", type="primary", use_container_width=True)
+                confirmar = st.button(t["btn_save_ehr"], type="primary", use_container_width=True)
                 if confirmar:
                     try:
                         with obtener_conexion() as conn:
@@ -352,19 +428,20 @@ with tab_prescripcion:
                                     (id_nueva_consulta, id_m, "1 dosis c/8h s/indicación")
                                 )
                             conn.commit()
-                        st.success(f"✅ Consulta #{id_nueva_consulta} y recetas guardadas en la base de datos hospitalaria con éxito.")
+                        st.success(t["msg_consult_saved"].format(id=id_nueva_consulta))
                         st.cache_data.clear()
                     except Exception as err:
-                        st.error(f"Error al guardar la consulta: {err}")
+                        st.error(t["msg_save_error"].format(err=err))
             with col_b2:
-                if st.button("🔄 Nueva Consulta", use_container_width=True):
+                if st.button(t["btn_new_consult"], use_container_width=True):
                     st.rerun()
+
 
 # ===========================================================================
 # TAB 2: DASHBOARD Y MÉTRICAS HOSPITALARIAS
 # ===========================================================================
 with tab_dashboard:
-    st.subheader("Indicadores Clave de Desempeño — FritzeFriends")
+    st.subheader(t["dash_title"])
     
     with obtener_conexion() as conn:
         total_pacientes = conn.execute("SELECT COUNT(*) FROM Pacientes").fetchone()[0]
@@ -384,16 +461,16 @@ with tab_dashboard:
         tasa_alertas = (consultas_con_alerta / total_consultas * 100) if total_consultas > 0 else 0
 
     kpi1, kpi2, kpi3, kpi4 = st.columns(4)
-    kpi1.metric("Pacientes Registrados", f"{total_pacientes}", "Cohorte Activa")
-    kpi2.metric("Consultas Totales", f"{total_consultas}", "Último Año")
-    kpi3.metric("Recetas Emitidas", f"{total_recetas}", f"{total_recetas/total_consultas:.1f} por consulta")
-    kpi4.metric("Tasa Detección Alertas", f"{tasa_alertas:.1f}%", "-15% Póliza Mala Praxis")
+    kpi1.metric(t["kpi_patients"], f"{total_pacientes}", t["kpi_cohort"])
+    kpi2.metric(t["kpi_consults"], f"{total_consultas}", t["kpi_last_year"])
+    kpi3.metric(t["kpi_prescriptions"], f"{total_recetas}", f"{total_recetas/total_consultas:.1f} {t['kpi_per_consult']}")
+    kpi4.metric(t["kpi_alert_rate"], f"{tasa_alertas:.1f}%", t["kpi_malpractice"])
 
     st.divider()
     col_g1, col_g2 = st.columns(2)
 
     with col_g1:
-        st.markdown("##### 📌 Distribución de Consultas por Especialidad")
+        st.markdown(f"##### {t['chart_esp_title']}")
         with obtener_conexion() as conn:
             df_esp = pd.read_sql("""
                 SELECT m.especialidad, COUNT(c.id_consulta) AS total_consultas
@@ -403,14 +480,14 @@ with tab_dashboard:
             """, conn)
         
         chart_esp = alt.Chart(df_esp).mark_bar(color="#005B94", cornerRadiusTopLeft=6, cornerRadiusTopRight=6).encode(
-            x=alt.X("especialidad:N", title="Especialidad"),
-            y=alt.Y("total_consultas:Q", title="Total Consultas"),
+            x=alt.X("especialidad:N", title=t["chart_esp_x"]),
+            y=alt.Y("total_consultas:Q", title=t["chart_esp_y"]),
             tooltip=["especialidad", "total_consultas"]
         ).properties(height=300)
         st.altair_chart(chart_esp, use_container_width=True)
 
     with col_g2:
-        st.markdown("##### 💊 Principios Activos Más Recetados en el Hospital")
+        st.markdown(f"##### {t['chart_meds_title']}")
         with obtener_conexion() as conn:
             df_top_meds = pd.read_sql("""
                 SELECT m.principio_activo, COUNT(r.id_receta) AS prescripciones
@@ -422,105 +499,119 @@ with tab_dashboard:
             """, conn)
 
         chart_meds = alt.Chart(df_top_meds).mark_bar(color="#00A896", cornerRadiusTopLeft=6, cornerRadiusTopRight=6).encode(
-            x=alt.X("prescripciones:Q", title="Prescripciones"),
-            y=alt.Y("principio_activo:N", sort="-x", title="Principio Activo"),
+            x=alt.X("prescripciones:Q", title=t["chart_meds_x"]),
+            y=alt.Y("principio_activo:N", sort="-x", title=t["chart_meds_y"]),
             tooltip=["principio_activo", "prescripciones"]
         ).properties(height=300)
         st.altair_chart(chart_meds, use_container_width=True)
 
     st.markdown("---")
-    st.info("""
-    💡 **Impacto Clínico y Operativo en FritzeFriends:**
-    * **Reducción de Tiempo:** Los médicos ahorran en promedio **4.2 minutos por paciente** al evitar búsquedas externas en manuales físicos o vademécums.
-    * **Prevención de Litigios:** La detección temprana de incompatibilidades de alto riesgo (ej. *Aspirina + Warfarina*) previene hasta 12 casos anuales de hemorragias graves, protegiendo al hospital frente a reclamaciones por mala praxis médica.
+    st.info(f"""
+    💡 **{t['dash_title']}:**
+    {t['dash_info_p1']}
+    {t['dash_info_p2']}
     """)
+
 
 # ===========================================================================
 # TAB 3: VADEMÉCUM Y MATRIZ DE INTERACCIONES
 # ===========================================================================
 with tab_vademecum:
-    st.subheader("Catálogo Farmacológico & Reglas de Interacción")
+    st.subheader(t["vad_title"])
 
     col_v1, col_v2 = st.columns([1, 1.2], gap="large")
 
     with col_v1:
-        st.markdown("##### 📚 Vademécum Hospitalario Autorizado")
+        st.markdown(f"##### {t['vad_auth_title']}")
         st.dataframe(
             df_medicamentos.rename(columns={
-                "id_medicamento": "ID",
-                "principio_activo": "Principio Activo",
-                "nombre_comercial": "Nombre Comercial"
+                "id_medicamento": t["vad_col_id"],
+                "principio_activo": t["vad_col_active"],
+                "nombre_comercial": t["vad_col_brand"]
             }),
             use_container_width=True,
             hide_index=True
         )
 
     with col_v2:
-        st.markdown("##### ⚠️ Matriz de Interacciones Adversas Conocidas")
+        st.markdown(f"##### {t['vad_matrix_title']}")
         with obtener_conexion() as conn:
             df_int_view = pd.read_sql("""
                 SELECT 
-                    m1.principio_activo AS "Fármaco 1",
-                    m2.principio_activo AS "Fármaco 2",
+                    m1.principio_activo AS "F1",
+                    m2.principio_activo AS "F2",
                     UPPER(i.gravedad) AS "Gravedad",
-                    i.descripcion AS "Efecto Adverso"
+                    i.descripcion AS "Efecto"
                 FROM Interacciones i
                 JOIN Medicamentos m1 ON i.id_medicamento_1 = m1.id_medicamento
                 JOIN Medicamentos m2 ON i.id_medicamento_2 = m2.id_medicamento
                 ORDER BY i.gravedad DESC
             """, conn)
-        st.dataframe(df_int_view, use_container_width=True, hide_index=True)
+            
+        df_int_display = df_int_view.rename(columns={
+            "F1": t["vad_col_drug1"],
+            "F2": t["vad_col_drug2"],
+            "Gravedad": t["vad_col_severity"],
+            "Efecto": t["vad_col_effect"]
+        })
+        st.dataframe(df_int_display, use_container_width=True, hide_index=True)
 
     st.divider()
-    st.markdown("##### ➕ Registrar Nueva Regla Farmacológica en el Sistema")
-    with st.expander("Añadir nueva interacción al catálogo clínico"):
+    st.markdown(f"##### {t['vad_add_title']}")
+    with st.expander(t["vad_expander"]):
         with st.form("form_nueva_interaccion"):
             c_i1, c_i2, c_i3 = st.columns(3)
             with c_i1:
-                med1_choice = st.selectbox("Fármaco 1", df_medicamentos["principio_activo"].tolist(), key="n_m1")
+                med1_choice = st.selectbox(t["vad_med1"], df_medicamentos["principio_activo"].tolist(), key="n_m1")
             with c_i2:
-                med2_choice = st.selectbox("Fármaco 2", df_medicamentos["principio_activo"].tolist(), key="n_m2")
+                med2_choice = st.selectbox(t["vad_med2"], df_medicamentos["principio_activo"].tolist(), key="n_m2")
             with c_i3:
-                gravedad_choice = st.selectbox("Gravedad", ["leve", "moderada", "grave"])
+                sev_options = [t["sev_mild"], t["sev_moderate"], t["sev_severe"]]
+                gravedad_choice = st.selectbox(t["vad_severity"], sev_options)
             
-            desc_choice = st.text_area("Descripción clínica del efecto adverso:")
-            btn_guardar_int = st.form_submit_button("Guardar Interacción en Base de Datos")
+            desc_choice = st.text_area(t["vad_desc_label"])
+            btn_guardar_int = st.form_submit_button(t["vad_submit_btn"])
 
             if btn_guardar_int:
                 id1 = int(df_medicamentos[df_medicamentos["principio_activo"] == med1_choice]["id_medicamento"].iloc[0])
                 id2 = int(df_medicamentos[df_medicamentos["principio_activo"] == med2_choice]["id_medicamento"].iloc[0])
 
                 if id1 == id2:
-                    st.error("No se puede registrar una interacción de un medicamento consigo mismo.")
+                    st.error(t["vad_same_err"])
                 else:
+                    # Mapear gravedad a español estándar en BD
+                    sev_map = {
+                        t["sev_mild"]: "leve",
+                        t["sev_moderate"]: "moderada",
+                        t["sev_severe"]: "grave"
+                    }
+                    gravedad_db = sev_map.get(gravedad_choice, "moderada")
                     id_min, id_max = min(id1, id2), max(id1, id2)
                     try:
                         with obtener_conexion() as conn:
                             cur = conn.cursor()
                             cur.execute(
                                 "INSERT OR REPLACE INTO Interacciones (id_medicamento_1, id_medicamento_2, gravedad, descripcion) VALUES (?, ?, ?, ?)",
-                                (id_min, id_max, gravedad_choice, desc_choice)
+                                (id_min, id_max, gravedad_db, desc_choice)
                             )
                             conn.commit()
-                        st.success(f"Regla de interacción entre '{med1_choice}' y '{med2_choice}' añadida exitosamente.")
+                        st.success(t["vad_success"].format(med1=med1_choice, med2=med2_choice))
                         st.cache_data.clear()
                         st.rerun()
                     except Exception as e:
-                        st.error(f"Error al guardar la regla: {e}")
+                        st.error(f"Error: {e}")
+
 
 # ===========================================================================
 # TAB 4: FARMACOVIGILANCIA REAL — OPENFDA FAERS
 # ===========================================================================
 with tab_openfda:
-    st.subheader("📡 Base de Datos de Farmacovigilancia Real — OpenFDA (FAERS)")
-    st.markdown("""
-    Esta vista integra reportes clínicos **auténticos** notificados a la **Food and Drug Administration (FDA)** 
-    a través del sistema *FAERS (FDA Adverse Event Reporting System)* para fármacos de alto impacto en polifarmacia.
-    """)
+    st.subheader(t["fda_title"])
+    st.markdown(t["fda_desc"])
 
     df_fda = cargar_eventos_fda()
     if df_fda.empty:
-        st.warning("No se encontraron registros de OpenFDA en `data/raw/openfda_adverse_events.csv`. Ejecute `src/fetch_openfda_data.py`.")
+        st.warning(t["fda_no_data"])
     else:
         # Métricas agregadas de OpenFDA
         total_reportes = len(df_fda)
@@ -529,48 +620,44 @@ with tab_openfda:
         pct_muerte = (df_fda["muerte"].sum() / total_reportes) * 100
 
         col_f1, col_f2, col_f3, col_f4 = st.columns(4)
-        col_f1.metric("Reportes FDA Reales", f"{total_reportes:,}", "Cohorte FAERS")
-        col_f2.metric("Hospitalizaciones", f"{pct_hosp:.1f}%", "Desenlace Grave")
-        col_f3.metric("Riesgo Vital Inmediato", f"{pct_vital:.1f}%", "Urgencia Crítica")
-        col_f4.metric("Desenlace Fatal (Muerte)", f"{pct_muerte:.1f}%", "Casos Notificados")
+        col_f1.metric(t["fda_kpi_reports"], f"{total_reportes:,}", t["fda_kpi_cohort"])
+        col_f2.metric(t["fda_kpi_hosp"], f"{pct_hosp:.1f}%", t["fda_kpi_severe"])
+        col_f3.metric(t["fda_kpi_life"], f"{pct_vital:.1f}%", t["fda_kpi_crit"])
+        col_f4.metric(t["fda_kpi_death"], f"{pct_muerte:.1f}%", t["fda_kpi_cases"])
 
         st.divider()
 
         col_filtro1, col_filtro2 = st.columns([1.5, 2])
         with col_filtro1:
-            farmacos_disponibles = ["Todos"] + sorted(df_fda["farmaco_buscado"].dropna().unique().tolist())
-            farmaco_filtro = st.selectbox("Filtrar por principio activo investigado en FDA:", farmacos_disponibles)
+            farmacos_disponibles = [t["fda_all"]] + sorted(df_fda["farmaco_buscado"].dropna().unique().tolist())
+            farmaco_filtro = st.selectbox(t["fda_filter_drug"], farmacos_disponibles)
         with col_filtro2:
-            solo_hosp = st.checkbox("Mostrar solo reportes con hospitalización o desenlace vital", value=False)
+            solo_hosp = st.checkbox(t["fda_only_hosp"], value=False)
 
         df_filtrado = df_fda.copy()
-        if farmaco_filtro != "Todos":
+        if farmaco_filtro != t["fda_all"]:
             df_filtrado = df_filtrado[df_filtrado["farmaco_buscado"] == farmaco_filtro]
         if solo_hosp:
             df_filtrado = df_filtrado[(df_filtrado["hospitalizacion"] == 1) | (df_filtrado["riesgo_vital"] == 1)]
 
-        st.markdown(f"##### 📋 Registros Encontrados: **{len(df_filtrado)}** reportes clínicos reales")
+        st.markdown(f"##### {t['fda_found'].format(count=len(df_filtrado))}")
 
         columnas_mostrar = [
             "report_id", "farmaco_buscado", "edad", "genero", "num_medicamentos",
             "medicamentos", "reaccion_adversa", "hospitalizacion", "riesgo_vital"
         ]
         df_display = df_filtrado[[c for c in columnas_mostrar if c in df_filtrado.columns]].rename(columns={
-            "report_id": "ID Reporte FDA",
-            "farmaco_buscado": "Fármaco Principal",
-            "edad": "Edad",
-            "genero": "Sexo",
-            "num_medicamentos": "Nº Fármacos",
-            "medicamentos": "Fármacos Concomitantes Notificados",
-            "reaccion_adversa": "Reacción Adversa (MedDRA PT)",
-            "hospitalizacion": "Hosp.",
-            "riesgo_vital": "Riesgo Vital"
+            "report_id": t["fda_col_id"],
+            "farmaco_buscado": t["fda_col_drug"],
+            "edad": t["fda_col_age"],
+            "genero": t["fda_col_gender"],
+            "num_medicamentos": t["fda_col_num_meds"],
+            "medicamentos": t["fda_col_concomitant"],
+            "reaccion_adversa": t["fda_col_reaction"],
+            "hospitalizacion": t["fda_col_hosp"],
+            "riesgo_vital": t["fda_col_vital"]
         })
 
         st.dataframe(df_display, use_container_width=True, hide_index=True)
 
-        st.info("""
-        ℹ️ **Aviso Regulatorio OpenFDA:** Datos extraídos mediante la API pública de OpenFDA (`api.fda.gov`). 
-        Los reportes reflejan sospechas clínicas notificadas voluntariamente por personal médico, instituciones y pacientes.
-        """)
-
+        st.info(t["fda_notice"])

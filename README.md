@@ -1,4 +1,4 @@
-# 🛡️ SafeRx AI — Asistente Clínico Inteligente de Prescripción Segura
+# 🛡️ Safe AI — Asistente Clínico Inteligente de Prescripción Segura
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.64-FF4B4B.svg)](https://streamlit.io/)
@@ -7,7 +7,7 @@
 [![Tailwind CSS](https://img.shields.io/badge/TailwindCSS-3.4-38B2AC.svg)](https://tailwindcss.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-> **SafeRx AI** es un sistema de soporte a la decisión clínica (CDSS) impulsado por Inteligencia Artificial y reglas farmacológicas en tiempo real, diseñado para erradicar las reacciones adversas e incompatibilidades medicamentosas en pacientes con polifarmacia.
+> **Safe AI** es un sistema de soporte a la decisión clínica (CDSS) impulsado por Inteligencia Artificial y reglas farmacológicas en tiempo real, diseñado para erradicar las reacciones adversas e incompatibilidades medicamentosas en pacientes con polifarmacia.
 
 ---
 

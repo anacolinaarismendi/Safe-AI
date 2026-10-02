@@ -62,7 +62,8 @@ export const Hero: React.FC = () => {
         {/* Action Buttons */}
         <div className="mt-10 max-w-md mx-auto sm:max-w-none flex flex-col sm:flex-row justify-center gap-4">
           <a
-            href="#contacto"
+            href="https://silent-goats-throw.loca.lt"
+            target="_blank"
             className="inline-flex items-center justify-center px-8 py-4 text-base font-bold rounded-full text-white bg-medical-blue hover:bg-medical-darkBlue transition-all shadow-lg shadow-blue-900/25 hover:shadow-xl hover:-translate-y-0.5 group"
           >
             <span>{t.hero.ctaPrimary}</span>
